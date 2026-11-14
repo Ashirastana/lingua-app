@@ -174,9 +174,21 @@ function addStars(n) {
 }
 // выученные слова: из бота (ссылка) + выученные в приложении
 const known = () => S.learned;
+// Лёгкость слова: есть картинка, одно короткое слово, раньше в программе — значит легче.
+let RANK = {}, EASY = [];
+function ease(i) {
+  const w = W(i)[0];
+  return (RANK[i] || 0) + (/[ \/…?¿¡,]/.test(w) ? 40 : 0) + (hasPic(i) ? 0 : 8) + w.length;
+}
+function initEase() {
+  D.order.forEach((i, k) => { RANK[i] = k; });
+  EASY = D.words.map((_, i) => i).sort((a, b) => ease(a) - ease(b));
+}
+// Слова для игр: только выученные и сначала самые лёгкие; с каждым уровнем — чуть сложнее.
 function pool(needPic) {
-  let p = known().filter((i) => i < D.words.length && (!needPic || hasPic(i)));
-  if (p.length < 6) for (const i of D.order) { if (p.length >= 8) break; if (!p.includes(i) && (!needPic || hasPic(i))) p.push(i); }
+  const lim = 8 + levelOf(S.stars) * 6;
+  let p = EASY.filter((i) => known().includes(i) && (!needPic || hasPic(i))).slice(0, lim);
+  if (p.length < 6) for (const i of EASY) { if (p.length >= 8) break; if (!p.includes(i) && (!needPic || hasPic(i))) p.push(i); }
   return p;
 }
 
@@ -185,9 +197,10 @@ function todayWords() {
   if (S.day === dayStr() && S.newWords && S.newWords.length) return S.newWords;
   const fromBot = (P.get("t") || "").split(",").map((x) => parseInt(x, 10)).filter((x) => x >= 0 && x < D.words.length);
   let w = fromBot;
-  if (!w.length) w = D.order.filter((i) => !S.learned.includes(i)).slice(0, NEW_PER_DAY);
+  if (!w.length) w = EASY.filter((i) => !S.learned.includes(i)).slice(0, NEW_PER_DAY);
   if (!w.length) w = pick(S.learned, NEW_PER_DAY);       // весь словарь пройден — повторяем
   if (S.day !== dayStr()) { S.day = dayStr(); S.stage = 0; }
+  w = w.slice().sort((a, b) => ease(a) - ease(b));
   S.newWords = w; save();
   return w;
 }
@@ -368,14 +381,16 @@ function pic2word(list, done) {
 // ---------- 🔤 угадай слово: картинка + буквы (как «4 фото 1 слово») ----------
 const ALPHA = { es: "abcdefghijlmnoprstuvyzñáéíóú", tr: "abcçdefgğhıijklmnoöprsştuüvyz" };
 function guessWord(list, done) {
-  list = list.filter((i) => /^[^\d…?¿¡,/()]{2,12}$/.test(W(i)[0]));
-  if (!list.length) list = pick(pool(false).filter((i) => /^[^\d…?¿¡,/()]{2,10}$/.test(W(i)[0])), 4);
+  const maxLen = 5 + levelOf(S.stars);           // уровень 1 — слова до 5 букв, дальше длиннее
+  const fits = (i) => /^[^\d…?¿¡,/() ]+$/.test(W(i)[0]) && W(i)[0].length <= maxLen;
+  list = list.filter(fits);
+  if (list.length < 3) list = uniq(list.concat(pool(false).filter(fits))).slice(0, 4);
   if (!list.length) return notEnough();
   let n = 0, right = 0;
   const next = () => {
     if (n >= list.length) return done(right);
     const [w, t, m, e] = W(list[n]); const target = w.toLowerCase(); const letters = target.replace(/ /g, "").split("");
-    const extra = Math.max(4, 12 - letters.length);
+    const extra = Math.min(6, Math.max(3, 9 - letters.length) + levelOf(S.stars));   // лишних букв мало, с уровнем больше
     const pool2 = shuffle(letters.concat(pick(ALPHA[LANG].split("").filter((c) => !letters.includes(c)), extra)));
     const st = frame(n, list.length); let filled = []; let hinted = false;
     const draw = () => {
@@ -410,9 +425,10 @@ function guessWord(list, done) {
 
 // ---------- 🪜 собери фразу ----------
 function sentenceGame(count, done) {
-  const open = D.sentences.filter((s) => s[3] <= Math.max(known().length, 6));
+  const open = D.sentences.filter((s) => s[3] <= Math.max(known().length, 6))
+    .sort((a, b) => a[0].split(" ").length - b[0].split(" ").length);
   if (!open.length) return notEnough();
-  const list = shuffle(open.slice(-3).concat(pick(open.slice(0, -3), Math.max(0, count - 3)))).slice(0, count);
+  const list = open.slice(0, Math.max(count, 2 + levelOf(S.stars))).slice(-count);
   let n = 0, right = 0;
   const next = () => {
     if (n >= list.length) return done(right);
@@ -451,8 +467,8 @@ function myWords() {
 }
 
 // ================= запуск =================
-fetch(LANG + ".json?v=2").then((r) => r.json()).then((data) => {
-  D = data; initVoice();
+fetch(LANG + ".json?v=3").then((r) => r.json()).then((data) => {
+  D = data; initVoice(); initEase();
   storeGet((raw) => {
     let o = {}; try { o = JSON.parse(raw || "{}"); } catch (e) {}
     S = { stars: o.st || 0, streak: o.sk || 0, last: o.last || "", day: o.day || "", stage: o.stage || 0, newWords: o.nw || [],
