@@ -173,7 +173,8 @@ function storeGet(cb) {
 }
 function save() {
   const v = JSON.stringify({ st: S.stars, sk: S.streak, last: S.last, stage: S.stage, ls: S.lesson, lw: listToBits(S.learned),
-                             vd: S.vidDay, lp: S.lastPraise });
+                             vd: S.vidDay, lp: S.lastPraise, n: S.n, ck: listToBits(S.check), cp: S.checkPos,
+                             co: listToBits(S.checkOk) });
   try { if (tg && tg.CloudStorage && tg.isVersionAtLeast("6.9")) tg.CloudStorage.setItem(KEY, v); } catch (e) {}
   try { localStorage.setItem(KEY, v); } catch (e) {}
 }
@@ -206,7 +207,7 @@ function curLesson() {                       // первый урок, где е
   const k = D.days.findIndex((d) => d[1].some((i) => !S.learned.includes(i)));
   return k < 0 ? D.days.length - 1 : k;
 }
-function lessonWords(k) { return D.days[k][1]; }
+function lessonWords(k) { const w = D.days[k][1].filter((i) => !S.learned.includes(i)); return w.length ? w : D.days[k][1]; }
 
 // ================= главный экран =================
 const STAGES = [
@@ -251,6 +252,14 @@ function home() {
       <div class="tile" data-g="vid" style="grid-column:1 / -1"><span class="i">🎬</span>Видео на ${LANG === "es" ? "испанском" : "турецком"}</div>
     </div>`;
   app.querySelector("#go").onclick = runLesson;
+  if (checkLeft()) {   // сначала проверка старых слов
+    const hero = app.querySelector("#go");
+    hero.outerHTML = `<button class="hero" id="go" style="background:linear-gradient(135deg,#8b5cf6,#6366f1)">
+      <div class="h1">🧪 Проверка знаний</div>
+      <div class="theme">Слова, которые Вы уже проходили · осталось ${checkLeft()}</div>
+      <div class="steps"><i class="on" style="flex:${S.checkPos}"></i><i style="flex:${checkLeft()}"></i></div></button>`;
+    app.querySelector("#go").onclick = runCheck;
+  }
   const P1 = () => practiceEnd;
   app.querySelectorAll("[data-g]").forEach((t) => t.onclick = () => ({
     cards: () => cardsGame(pick(pool(false), 8), P1()),
@@ -478,6 +487,53 @@ function sentenceGame(count, done) {
   next();
 }
 
+// ---------- 🧪 проверка знаний: старые слова ----------
+const checkLeft = () => Math.max(0, S.check.length - S.checkPos);
+function runCheck() {
+  const batch = S.check.slice(S.checkPos, S.checkPos + 10);
+  let n = 0;
+  const allIdx = D.words.map((_, j) => j);
+  const next = () => {
+    if (n >= batch.length) return checkPause();
+    const i = batch[n]; const st = frame(S.checkPos, S.check.length);
+    const pic = hasPic(i);
+    const opts = shuffle(pick(allIdx.filter((j) => j !== i && W(j)[2] !== W(i)[2] && (!pic || W(j)[3] !== W(i)[3])
+                                                      && W(j)[0].length < 22), 3).concat([i]));
+    st.innerHTML = (pic ? `<div class="pic">${W(i)[3]}</div><div class="ask">Как это будет?</div>`
+                        : `<div class="word" style="margin-top:20px">${wordHtml(W(i)[0])}</div><div class="tr">${trHtml(W(i)[1])}</div>
+                           <div class="ask" style="margin-top:12px">Что это значит?</div>`)
+      + `<div class="opts">${opts.map((j, k) => `<div class="opt" data-k="${k}">${esc(pic ? W(j)[0] : W(j)[2])}</div>`).join("")}</div>
+         <div class="opt" data-k="-1" style="margin-top:10px;font-size:16px;color:var(--hint)">🤷 Не помню</div><div class="fb"></div>`;
+    st.querySelectorAll("[data-k]").forEach((el) => el.onclick = () => {
+      if (st.dataset.d) return; st.dataset.d = 1;
+      const k = +el.dataset.k; const ok = k >= 0 && opts[k] === i; const fb = st.querySelector(".fb");
+      if (ok) { el.classList.add("ok"); S.checkOk.push(i); fb.className = "fb g"; fb.textContent = pick(["Помнишь! 💖", "Верно! 🌟", "Умничка! 😘"], 1)[0]; sndOk(); }
+      else { if (k >= 0) el.classList.add("no"); st.querySelectorAll(".opts .opt").forEach((x, j) => opts[j] === i && x.classList.add("ok"));
+             fb.className = "fb b"; fb.innerHTML = `${esc(W(i)[0])} — ${esc(W(i)[2])}<br><span class="sub">Выучим заново 💪</span>`; sndNo(); }
+      S.checkPos++; S.learned = uniq(S.checkOk); save(); speak(W(i)[0]); n++;
+      setTimeout(next, ok ? 900 : 2000);
+    });
+  };
+  next();
+}
+function checkPause() {
+  const left = checkLeft(), total = S.check.length, ok = S.checkOk.length;
+  hearts(); sndWin();
+  if (left) {
+    app.innerHTML = `<div class="center pop"><div class="pic">💪</div><div class="praise">${praise()}</div>
+      <div class="sub">Проверено ${S.checkPos} из ${total} · помнишь ${ok}</div>
+      <button class="btn" id="m">Продолжить проверку ▶️</button><button class="btn light" id="h">🏠 Позже</button></div>`;
+    app.querySelector("#m").onclick = runCheck; app.querySelector("#h").onclick = home; return;
+  }
+  confetti(); addStars(ok);
+  app.innerHTML = `<div class="center pop"><div class="pic">🏆</div><div class="praise">${praise()}</div>
+    <h1>Ты помнишь ${ok} из ${total} слов!</h1>
+    <div class="sub">${total - ok ? (total - ok) + " слов выучим заново — они будут в уроках 💪" : "Все слова на месте — ты чудо! 🌟"}</div>
+    <div class="reward"><span class="pill">⭐ +${ok}</span></div>
+    <button class="btn" id="go2">▶️ Начать уроки</button></div>`;
+  app.querySelector("#go2").onclick = runLesson;
+}
+
 // ---------- 🎬 видео по уровню ----------
 function videos() {
   const lvl = levelOf(S.stars) + 1;
@@ -509,14 +565,21 @@ function myWords() {
 }
 
 // ================= запуск =================
-fetch(LANG + ".json?v=4").then((r) => r.json()).then((data) => {
+fetch(LANG + ".json?v=5").then((r) => r.json()).then((data) => {
   D = data; initVoice(); initEase();
   storeGet((raw) => {
     let o = {}; try { o = JSON.parse(raw || "{}"); } catch (e) {}
     S = { stars: o.st || 0, streak: o.sk || 0, last: o.last || "", stage: o.stage || 0, lesson: o.ls || 0, vidDay: o.vd || "",
-          lastPraise: o.lp || "",
-          learned: uniq(bitsToList(o.lw).concat(bitsToList(P.get("k")))).filter((i) => i < D.words.length) };
+          lastPraise: o.lp || "", n: o.n || "", check: bitsToList(o.ck), checkPos: o.cp || 0, checkOk: bitsToList(o.co),
+          learned: uniq(bitsToList(o.lw).concat(raw || P.get("n") ? [] : bitsToList(P.get("k")))).filter((i) => i < D.words.length) };
     if (S.last && S.last !== dayStr() && S.last !== yesterday()) S.streak = 0;   // серия прервалась
+    // «Чистый лист» от преподавателя: начинаем заново и сначала проверяем старые слова
+    const fresh = P.get("n");
+    if (fresh && fresh !== S.n) {
+      S.n = fresh; S.learned = []; S.stage = 0; S.lesson = 0;
+      S.check = bitsToList(P.get("c")).filter((i) => i < D.words.length); S.checkPos = 0; S.checkOk = [];
+      save();
+    }
     home();
   });
 }).catch(() => { app.innerHTML = '<div class="empty">Не получилось загрузить 😕<br>Проверьте интернет и откройте ещё раз.</div>'; });
