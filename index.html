@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Учим слова</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root { --bg:#fff8f0; --text:#2b2b33; --hint:#8f8f9a; --card:#fff; --accent:#ff7a45; --accent2:#ffb347;
+          --good:#2fb36b; --bad:#e5484d; --soft:rgba(255,122,69,.12); --line:rgba(0,0,0,.08); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; background:var(--bg); color:var(--text); font:17px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  #app { max-width:520px; margin:0 auto; padding:14px 16px 36px; min-height:100vh; }
+  button { font:inherit; }
+  .hdr { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+  .pill { display:inline-flex; gap:5px; align-items:center; background:var(--card); border-radius:999px; padding:7px 12px;
+          font-weight:800; box-shadow:0 1px 6px rgba(0,0,0,.06); }
+  .lvl { background:var(--card); border-radius:20px; padding:12px 14px; margin-top:12px; box-shadow:0 1px 8px rgba(0,0,0,.05); }
+  .lvl .t { display:flex; justify-content:space-between; font-weight:800; }
+  .lvl .t span:last-child { color:var(--hint); font-weight:600; font-size:14px; }
+  .bar { height:12px; background:var(--soft); border-radius:99px; overflow:hidden; margin-top:8px; }
+  .bar i { display:block; height:100%; background:linear-gradient(90deg,var(--accent2),var(--accent)); border-radius:99px; transition:width .4s; }
+  .hero { margin-top:16px; border:0; width:100%; border-radius:26px; padding:22px 18px; color:#fff; text-align:left; cursor:pointer;
+          background:linear-gradient(135deg,#ff8a50,#ff5e62); box-shadow:0 8px 22px rgba(255,94,98,.35); }
+  .hero.done { background:linear-gradient(135deg,#43c37b,#2fa86a); box-shadow:0 8px 22px rgba(47,168,106,.3); }
+  .hero .h1 { font-size:26px; font-weight:900; }
+  .hero .h2 { opacity:.92; margin-top:4px; font-size:16px; }
+  .steps { display:flex; gap:6px; margin-top:12px; }
+  .steps i { flex:1; height:8px; border-radius:9px; background:rgba(255,255,255,.35); }
+  .steps i.on { background:#fff; }
+  .sec { color:var(--hint); font-weight:700; font-size:14px; margin:22px 4px 8px; }
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .tile { background:var(--card); border-radius:18px; padding:12px 6px; text-align:center; cursor:pointer; user-select:none;
+          box-shadow:0 1px 6px rgba(0,0,0,.05); font-weight:700; font-size:14px; }
+  .tile:active, .opt:active, .key:active, .btn:active, .hero:active { transform:scale(.96); }
+  .tile .i { font-size:34px; display:block; margin-bottom:4px; }
+  .top { display:flex; justify-content:space-between; align-items:center; }
+  .x { background:none; border:0; font-size:26px; color:var(--hint); padding:4px 8px 4px 0; cursor:pointer; }
+  .prog { flex:1; margin:0 10px; height:12px; background:var(--soft); border-radius:99px; overflow:hidden; }
+  .prog i { display:block; height:100%; background:var(--good); border-radius:99px; transition:width .3s; }
+  .stage { text-align:center; color:var(--hint); font-weight:700; font-size:14px; margin:10px 0 4px; }
+  .pic { font-size:120px; text-align:center; line-height:1.1; margin:8px 0; }
+  .word { font-size:36px; font-weight:900; text-align:center; }
+  .word b { color:var(--accent); }
+  .tr { text-align:center; color:var(--hint); font-size:21px; margin-top:2px; }
+  .tr .s { color:var(--accent); font-weight:800; }
+  .mean { text-align:center; font-size:19px; margin-top:8px; }
+  .ask { text-align:center; font-size:20px; font-weight:800; margin:6px 0 4px; }
+  .opts { display:grid; gap:10px; margin-top:14px; }
+  .opts.pics { grid-template-columns:1fr 1fr; }
+  .opt { background:var(--card); border:2px solid var(--line); border-radius:18px; padding:15px; font-size:20px; font-weight:800;
+         text-align:center; cursor:pointer; user-select:none; }
+  .opts.pics .opt { font-size:66px; padding:16px 6px; line-height:1.1; }
+  .ok { border-color:var(--good)!important; background:rgba(47,179,107,.16)!important; }
+  .no { border-color:var(--bad)!important; background:rgba(229,72,77,.12)!important; animation:shake .35s; }
+  @keyframes shake { 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+  .btn { display:block; width:100%; border:0; border-radius:18px; padding:16px; font-size:19px; font-weight:800; background:var(--accent);
+         color:#fff; cursor:pointer; margin-top:14px; }
+  .btn.light { background:var(--soft); color:var(--accent); }
+  .row { display:flex; gap:10px; } .row .btn { margin-top:12px; }
+  .card { background:var(--card); border-radius:26px; padding:18px; box-shadow:0 2px 12px rgba(0,0,0,.07); min-height:320px;
+          display:flex; flex-direction:column; justify-content:center; cursor:pointer; }
+  .tap { text-align:center; color:var(--hint); font-size:16px; margin-top:12px; }
+  .say { display:block; margin:12px auto 0; background:var(--soft); color:var(--accent); border:0; border-radius:999px; padding:9px 18px;
+         font-weight:800; font-size:17px; cursor:pointer; }
+  .slots { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:16px 0; }
+  .slot { width:42px; height:50px; border-radius:12px; background:var(--card); border:2px solid var(--line); display:flex; align-items:center;
+          justify-content:center; font-size:24px; font-weight:900; cursor:pointer; }
+  .slot.f { border-color:var(--accent); }
+  .slot.sp { width:14px; border:0; background:none; }
+  .keys { display:grid; grid-template-columns:repeat(6,1fr); gap:7px; }
+  .key { height:50px; border-radius:12px; background:var(--card); border:2px solid var(--line); font-size:22px; font-weight:900;
+         display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none; }
+  .key.used { visibility:hidden; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .chip { background:var(--card); border:2px solid var(--line); border-radius:14px; padding:11px 15px; font-size:21px; font-weight:800; cursor:pointer; }
+  .chip.used { visibility:hidden; }
+  .line { min-height:62px; border-bottom:3px dashed var(--line); padding:8px 0; display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:14px 0; }
+  .line .chip { border-color:var(--accent); }
+  .fb { text-align:center; font-size:21px; font-weight:900; min-height:30px; margin-top:12px; }
+  .fb.g { color:var(--good); } .fb.b { color:var(--bad); }
+  .center { text-align:center; padding-top:26px; }
+  .center .pic { font-size:96px; }
+  .center h1 { margin:6px 0; font-size:28px; }
+  .sub { color:var(--hint); font-size:17px; }
+  .reward { display:flex; justify-content:center; gap:10px; margin:16px 0 4px; flex-wrap:wrap; }
+  .reward .pill { font-size:18px; }
+  .confetti { position:fixed; top:-30px; font-size:28px; pointer-events:none; animation:fall 2.4s linear forwards; z-index:9; }
+  @keyframes fall { to { transform:translateY(110vh) rotate(600deg); opacity:.6; } }
+  .pop { animation:pop .45s ease; } @keyframes pop { 0%{transform:scale(.6);opacity:0} 70%{transform:scale(1.08)} 100%{transform:scale(1)} }
+  .empty { text-align:center; color:var(--hint); margin-top:40px; }
+</style>
+</head>
+<body>
+<div id="app"><div class="empty">Загружаю… ⏳</div></div>
+<script>
+"use strict";
+const tg = window.Telegram && window.Telegram.WebApp;
+try { tg.ready(); tg.expand(); tg.setHeaderColor && tg.setHeaderColor("#fff8f0"); tg.setBackgroundColor && tg.setBackgroundColor("#fff8f0"); } catch (e) {}
+const app = document.getElementById("app");
+const P = new URLSearchParams(location.search);
+const LANG = P.get("lang") === "tr" ? "tr" : "es";
+const NEW_PER_DAY = 5;          // новых слов в уроке приложения, если бот не прислал слова дня
+let D = null, S = null;         // D — словарь, S — сохранённый прогресс
+
+// ================= помощники =================
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pick = (a, n) => shuffle(a).slice(0, n);
+const uniq = (a) => Array.from(new Set(a));
+const W = (i) => D.words[i];              // [слово, транскрипция, перевод, картинка, картинка_одна_на_слово]
+const hasPic = (i) => W(i)[4] === 1;
+const dayStr = (d) => { d = d || new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
+const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return dayStr(d); };
+function trHtml(t) { return esc(t).replace(/(.)́/g, '<span class="s">$1</span>'); }
+function wordHtml(w) { const m = w.match(/^([¿¡]*)(.)([\s\S]*)$/); return m ? esc(m[1]) + "<b>" + esc(m[2]) + "</b>" + esc(m[3]) : esc(w); }
+function bitsToList(s) {
+  if (!s) return [];
+  try { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)); const out = [];
+    for (let i = 0; i < b.length; i++) for (let k = 0; k < 8; k++) if (b.charCodeAt(i) & (1 << k)) out.push(i * 8 + k); return out; }
+  catch (e) { return []; }
+}
+function listToBits(list) {
+  if (!list.length) return ""; const n = Math.max.apply(null, list); const a = new Uint8Array((n >> 3) + 1);
+  list.forEach((i) => { a[i >> 3] |= 1 << (i & 7); }); let s = ""; a.forEach((x) => { s += String.fromCharCode(x); });
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// ================= звуки и вибрация =================
+let AC = null;
+function tone(freqs, dur) {
+  try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); let t = AC.currentTime;
+    freqs.forEach((f) => { const o = AC.createOscillator(), g = AC.createGain(); o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + dur); o.connect(g); g.connect(AC.destination);
+      o.start(t); o.stop(t + dur); t += dur * .7; }); } catch (e) {}
+}
+const sndOk = () => { tone([660, 880], .14); try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) {} };
+const sndNo = () => { tone([220, 180], .16); try { tg.HapticFeedback.notificationOccurred("error"); } catch (e) {} };
+const sndWin = () => tone([523, 659, 784, 1047], .16);
+
+// ================= озвучка слова =================
+let VOICE = null;
+function initVoice() {
+  if (!("speechSynthesis" in window)) return;
+  const set = () => { VOICE = speechSynthesis.getVoices().find((v) => (v.lang || "").replace("_", "-").startsWith(D.voice.slice(0, 2))) || null; };
+  set(); speechSynthesis.onvoiceschanged = set;
+}
+function speak(text) {
+  try { if (!("speechSynthesis" in window)) return; speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(text).replace(/[…¿¡]/g, "")); u.lang = D.voice; if (VOICE) u.voice = VOICE; u.rate = .8;
+    speechSynthesis.speak(u); } catch (e) {}
+}
+const sayBtn = (w) => ("speechSynthesis" in window) ? `<button class="say" data-say="${esc(w)}">🔊 Послушать</button>` : "";
+app.addEventListener("click", (e) => { const b = e.target.closest("[data-say]"); if (b) { e.stopPropagation(); speak(b.dataset.say); } });
+
+// ================= прогресс: очки, уровни, серия дней =================
+const KEY = "p_" + LANG;
+const LEVELS = [0, 40, 100, 180, 280, 400, 550, 730, 950, 1200, 1500, 1850, 2250, 2700, 3200];
+const LEVEL_ICONS = ["🌱", "🌿", "🌼", "🌸", "🌻", "🍀", "⭐", "🌟", "💫", "🏅", "🥉", "🥈", "🥇", "🏆", "👑"];
+function levelOf(stars) { let l = 0; LEVELS.forEach((need, i) => { if (stars >= need) l = i; }); return l; }
+function storeGet(cb) {
+  const local = () => { try { cb(localStorage.getItem(KEY)); } catch (e) { cb(null); } };
+  try { if (tg && tg.CloudStorage && tg.isVersionAtLeast("6.9")) return tg.CloudStorage.getItem(KEY, (err, v) => err || !v ? local() : cb(v)); } catch (e) {}
+  local();
+}
+function save() {
+  const v = JSON.stringify({ st: S.stars, sk: S.streak, last: S.last, day: S.day, stage: S.stage, lw: listToBits(S.learned), nw: S.newWords });
+  try { if (tg && tg.CloudStorage && tg.isVersionAtLeast("6.9")) tg.CloudStorage.setItem(KEY, v); } catch (e) {}
+  try { localStorage.setItem(KEY, v); } catch (e) {}
+}
+function addStars(n) {
+  const before = levelOf(S.stars); S.stars += n; save();
+  return levelOf(S.stars) > before;          // true — новый уровень!
+}
+// выученные слова: из бота (ссылка) + выученные в приложении
+const known = () => S.learned;
+function pool(needPic) {
+  let p = known().filter((i) => i < D.words.length && (!needPic || hasPic(i)));
+  if (p.length < 6) for (const i of D.order) { if (p.length >= 8) break; if (!p.includes(i) && (!needPic || hasPic(i))) p.push(i); }
+  return p;
+}
+
+// ================= слова сегодняшнего урока =================
+function todayWords() {
+  if (S.day === dayStr() && S.newWords && S.newWords.length) return S.newWords;
+  const fromBot = (P.get("t") || "").split(",").map((x) => parseInt(x, 10)).filter((x) => x >= 0 && x < D.words.length);
+  let w = fromBot;
+  if (!w.length) w = D.order.filter((i) => !S.learned.includes(i)).slice(0, NEW_PER_DAY);
+  if (!w.length) w = pick(S.learned, NEW_PER_DAY);       // весь словарь пройден — повторяем
+  if (S.day !== dayStr()) { S.day = dayStr(); S.stage = 0; }
+  S.newWords = w; save();
+  return w;
+}
+
+// ================= главный экран =================
+const STAGES = [
+  { name: "Новые слова", run: (w, done) => cardsGame(w, done) },
+  { name: "Найди картинку", run: (w, done) => word2pic(lessonMix(w, true), done) },
+  { name: "Что на картинке?", run: (w, done) => pic2word(lessonMix(w, true), done) },
+  { name: "Угадай слово", run: (w, done) => guessWord(lessonMix(w, false).slice(0, 4), done) },
+  { name: "Собери фразу", run: (w, done) => sentenceGame(3, done) },
+];
+function lessonMix(w, needPic) { // сегодняшние слова + немного старых для повторения
+  const today = w.filter((i) => !needPic || hasPic(i));
+  const old = pick(pool(needPic).filter((i) => !w.includes(i)), Math.max(2, 6 - today.length));
+  return shuffle(uniq(today.concat(old))).slice(0, 7);
+}
+
+function home() {
+  const tw = todayWords();
+  const lvl = levelOf(S.stars), next = LEVELS[lvl + 1];
+  const pct = next ? Math.round((S.stars - LEVELS[lvl]) / (next - LEVELS[lvl]) * 100) : 100;
+  const doneToday = S.last === dayStr();
+  const flag = LANG === "es" ? "🇪🇸" : "🇹🇷";
+  app.innerHTML = `
+    <div class="hdr"><span class="pill">${flag} ${LANG === "es" ? "Испанский" : "Турецкий"}</span>
+      <span class="pill">🔥 ${S.streak}</span><span class="pill">⭐ ${S.stars}</span></div>
+    <div class="lvl"><div class="t"><span>${LEVEL_ICONS[lvl]} Уровень ${lvl + 1}</span>
+      <span>${next ? (next - S.stars) + " ⭐ до " + (lvl + 2) : "максимум!"}</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>
+    <button class="hero ${doneToday ? "done" : ""}" id="go">
+      <div class="h1">${doneToday ? "✅ Урок пройден!" : S.stage ? "▶️ Продолжить урок" : "▶️ Урок дня"}</div>
+      <div class="h2">${doneToday ? "Завтра — новые слова. Можно повторить 👇" : tw.length + " новых слов · 5 шагов · ~10 минут"}</div>
+      <div class="steps">${STAGES.map((_, k) => `<i class="${doneToday || k < S.stage ? "on" : ""}"></i>`).join("")}</div>
+    </button>
+    <div class="sec">ПОВТОРИТЬ</div>
+    <div class="grid">
+      <div class="tile" data-g="cards"><span class="i">📚</span>Карточки</div>
+      <div class="tile" data-g="guess"><span class="i">🔤</span>Угадай слово</div>
+      <div class="tile" data-g="w2p"><span class="i">🎯</span>Найди картинку</div>
+      <div class="tile" data-g="p2w"><span class="i">🖼</span>Что это?</div>
+      <div class="tile" data-g="sent"><span class="i">🪜</span>Собери фразу</div>
+      <div class="tile" data-g="all"><span class="i">📖</span>Мои слова</div>
+    </div>`;
+  app.querySelector("#go").onclick = () => doneToday ? practiceAgain() : runLesson();
+  const P1 = () => practiceEnd;
+  app.querySelectorAll("[data-g]").forEach((t) => t.onclick = () => ({
+    cards: () => cardsGame(pick(pool(false), 8), P1()),
+    guess: () => guessWord(pick(pool(false), 5), P1()),
+    w2p: () => word2pic(pick(pool(true), 7), P1()),
+    p2w: () => pic2word(pick(pool(true), 7), P1()),
+    sent: () => sentenceGame(4, P1()),
+    all: () => myWords(),
+  }[t.dataset.g])());
+}
+function practiceAgain() { guessWord(pick(pool(false), 5), practiceEnd); }
+
+// ================= урок дня: все шаги подряд =================
+function runLesson() {
+  const w = todayWords();
+  const step = () => {
+    if (S.stage >= STAGES.length) return lessonDone(w);
+    STAGES[S.stage].run(w, (right) => {
+      S.stage++; save();
+      const up = addStars(right);
+      if (S.stage >= STAGES.length) return lessonDone(w, up);
+      between(S.stage, right, up, step);
+    });
+  };
+  step();
+}
+function between(stage, right, levelUp, next) {
+  sndWin();
+  app.innerHTML = `<div class="center pop">
+      <div class="pic">${levelUp ? LEVEL_ICONS[levelOf(S.stars)] : ["👏", "🎉", "💪", "🔥", "🌟"][stage % 5]}</div>
+      <h1>${levelUp ? "Новый уровень " + (levelOf(S.stars) + 1) + "!" : "Шаг " + stage + " из " + STAGES.length + " ✅"}</h1>
+      <div class="reward"><span class="pill">⭐ +${right}</span></div>
+      <div class="sub">Дальше: ${STAGES[stage].name}</div>
+      <button class="btn" id="n">Дальше ▶️</button></div>`;
+  if (levelUp) confetti();
+  app.querySelector("#n").onclick = next;
+}
+function lessonDone(w, levelUp) {
+  if (S.last !== dayStr()) { S.streak = S.last === yesterday() ? S.streak + 1 : 1; S.last = dayStr(); }
+  S.learned = uniq(S.learned.concat(w));
+  const up = addStars(10) || levelUp;
+  confetti(); sndWin();
+  app.innerHTML = `<div class="center pop">
+      <div class="pic">🏆</div><h1>Урок дня пройден!</h1>
+      <div class="reward"><span class="pill">🔥 ${S.streak} ${S.streak === 1 ? "день" : "дн."} подряд</span><span class="pill">⭐ +10 бонус</span></div>
+      ${up ? `<div class="sub">Новый уровень ${levelOf(S.stars) + 1} ${LEVEL_ICONS[levelOf(S.stars)]}</div>` : ""}
+      <div class="sub" style="margin-top:8px">Маленькими шагами — к большой цели 🏔<br>Завтра — новые слова!</div>
+      <button class="btn" id="h">Готово</button></div>`;
+  app.querySelector("#h").onclick = home;
+}
+function practiceEnd(right) {
+  const up = addStars(right); sndWin(); if (up) confetti();
+  app.innerHTML = `<div class="center pop">
+      <div class="pic">${up ? LEVEL_ICONS[levelOf(S.stars)] : right ? "🎉" : "💪"}</div>
+      <h1>${up ? "Новый уровень " + (levelOf(S.stars) + 1) + "!" : right ? "Отлично!" : "Ещё разок!"}</h1>
+      <div class="reward"><span class="pill">⭐ +${right}</span></div>
+      <button class="btn" id="h">В меню</button></div>`;
+  app.querySelector("#h").onclick = home;
+}
+function confetti() {
+  const ic = ["🎉", "⭐", "✨", "🎊", "💛", "🌟"];
+  for (let i = 0; i < 26; i++) { const s = document.createElement("div"); s.className = "confetti"; s.textContent = ic[i % ic.length];
+    s.style.left = Math.random() * 100 + "vw"; s.style.animationDelay = Math.random() * .7 + "s"; document.body.appendChild(s); setTimeout(() => s.remove(), 3300); }
+}
+
+// ================= рамка игры =================
+function frame(n, total) {
+  app.innerHTML = `<div class="top"><button class="x" id="x">✕</button><div class="prog"><i style="width:${n / total * 100}%"></i></div>
+    <span class="pill">⭐ ${S.stars}</span></div><div id="st"></div>`;
+  app.querySelector("#x").onclick = home;
+  return app.querySelector("#st");
+}
+function notEnough() {
+  app.innerHTML = `<div class="center"><div class="pic">🌱</div><div class="sub">Пока мало слов для этой игры.<br>Пройдите урок дня 🙂</div>
+    <button class="btn" id="h">В меню</button></div>`;
+  app.querySelector("#h").onclick = home;
+}
+
+// ---------- 📚 карточки ----------
+function cardsGame(list, done) {
+  if (!list.length) return notEnough();
+  let n = 0;
+  const show = (open) => {
+    if (n >= list.length) return done(list.length);
+    const [w, t, m, e] = W(list[n]); const st = frame(n, list.length);
+    st.innerHTML = `<div class="card ${open ? "pop" : ""}" id="c"><div class="pic">${e || "💬"}</div>
+      ${open ? `<div class="word">${wordHtml(w)}</div><div class="tr">${trHtml(t)}</div><div class="mean">${esc(m)}</div>${sayBtn(w)}`
+             : `<div class="tap">Нажмите, чтобы открыть 👆</div>`}</div>
+      ${open ? `<button class="btn" id="n">Дальше ▶️</button>` : ""}`;
+    if (!open) st.querySelector("#c").onclick = () => { show(true); speak(w); };
+    else st.querySelector("#n").onclick = () => { n++; show(false); };
+  };
+  show(false);
+}
+
+// ---------- варианты ответа (общая механика) ----------
+function choice(items, render, done) {
+  if (items.length < 1) return notEnough();
+  let n = 0, right = 0;
+  const next = () => {
+    if (n >= items.length) return done(right);
+    const q = render(items[n]); const st = frame(n, items.length);
+    st.innerHTML = q.head + `<div class="opts ${q.pics ? "pics" : ""}">${q.opts.map((o, k) => `<div class="opt" data-k="${k}">${o.label}</div>`).join("")}</div><div class="fb"></div>`;
+    st.querySelectorAll(".opt").forEach((el) => el.onclick = () => {
+      if (st.dataset.d) return; st.dataset.d = 1; const ok = q.opts[+el.dataset.k].ok; const fb = st.querySelector(".fb");
+      if (ok) { el.classList.add("ok"); right++; fb.className = "fb g"; fb.textContent = pick(["Верно! 🎉", "Да! 👏", "Супер! 🔥", "Умница! ⭐"], 1)[0]; sndOk(); }
+      else { el.classList.add("no"); st.querySelectorAll(".opt").forEach((x, k) => q.opts[k].ok && x.classList.add("ok")); fb.className = "fb b"; fb.innerHTML = q.answer; sndNo(); }
+      speak(q.say); n++; setTimeout(next, ok ? 900 : 2000);
+    });
+  };
+  next();
+}
+// ---------- 🎯 слово → картинка ----------
+function word2pic(list, done) {
+  list = list.filter(hasPic); if (list.length < 1) return notEnough();
+  const all = D.words.map((_, j) => j).filter(hasPic);
+  choice(list, (i) => ({
+    head: `<div class="word" style="margin-top:14px">${wordHtml(W(i)[0])}</div><div class="tr">${trHtml(W(i)[1])}</div>${sayBtn(W(i)[0])}`,
+    pics: true, opts: shuffle(pick(all.filter((j) => j !== i), 3).concat([i])).map((j) => ({ label: W(j)[3], ok: j === i })),
+    answer: `${W(i)[3]} ${esc(W(i)[2])}`, say: W(i)[0],
+  }), done);
+}
+// ---------- 🖼 картинка → слово ----------
+function pic2word(list, done) {
+  list = list.filter(hasPic); if (list.length < 1) return notEnough();
+  choice(list, (i) => ({
+    head: `<div class="pic">${W(i)[3]}</div><div class="ask">Что это?</div>`,
+    opts: shuffle(pick(D.words.map((_, j) => j).filter((j) => j !== i && W(j)[3] !== W(i)[3] && W(j)[0].length < 22), 3).concat([i]))
+      .map((j) => ({ label: esc(W(j)[0]), ok: j === i })),
+    answer: `${esc(W(i)[0])} — ${esc(W(i)[2])}`, say: W(i)[0],
+  }), done);
+}
+
+// ---------- 🔤 угадай слово: картинка + буквы (как «4 фото 1 слово») ----------
+const ALPHA = { es: "abcdefghijlmnoprstuvyzñáéíóú", tr: "abcçdefgğhıijklmnoöprsştuüvyz" };
+function guessWord(list, done) {
+  list = list.filter((i) => /^[^\d…?¿¡,/()]{2,12}$/.test(W(i)[0]));
+  if (!list.length) list = pick(pool(false).filter((i) => /^[^\d…?¿¡,/()]{2,10}$/.test(W(i)[0])), 4);
+  if (!list.length) return notEnough();
+  let n = 0, right = 0;
+  const next = () => {
+    if (n >= list.length) return done(right);
+    const [w, t, m, e] = W(list[n]); const target = w.toLowerCase(); const letters = target.replace(/ /g, "").split("");
+    const extra = Math.max(4, 12 - letters.length);
+    const pool2 = shuffle(letters.concat(pick(ALPHA[LANG].split("").filter((c) => !letters.includes(c)), extra)));
+    const st = frame(n, list.length); let filled = []; let hinted = false;
+    const draw = () => {
+      let li = 0;
+      const slots = target.split("").map((c) => c === " " ? `<div class="slot sp"></div>`
+        : (() => { const k = filled[li]; const h = k !== undefined ? esc(pool2[k]) : ""; const html = `<div class="slot ${h ? "f" : ""}" data-s="${li}">${h}</div>`; li++; return html; })()).join("");
+      st.innerHTML = `<div class="pic" style="font-size:100px">${e || "💬"}</div><div class="mean">${esc(m)}</div>
+        <div class="slots">${slots}</div>
+        <div class="keys">${pool2.map((c, k) => `<div class="key ${filled.includes(k) ? "used" : ""}" data-k="${k}">${esc(c)}</div>`).join("")}</div>
+        <div class="row"><button class="btn light" id="hint">💡 Подсказка</button><button class="btn light" id="clr">⌫ Стереть</button></div><div class="fb"></div>`;
+      st.querySelectorAll(".key").forEach((el) => el.onclick = () => { if (filled.length < letters.length) { filled.push(+el.dataset.k); draw(); check(); } });
+      st.querySelectorAll(".slot[data-s]").forEach((el) => el.onclick = () => { const s = +el.dataset.s; if (s < filled.length) { filled = filled.slice(0, s); draw(); } });
+      st.querySelector("#clr").onclick = () => { filled.pop(); draw(); };
+      st.querySelector("#hint").onclick = () => {   // правильная следующая буква
+        hinted = true; let ok = 0; while (ok < filled.length && pool2[filled[ok]] === letters[ok]) ok++; filled = filled.slice(0, ok);
+        if (ok < letters.length) { const k = pool2.findIndex((c, j) => c === letters[ok] && !filled.includes(j)); if (k >= 0) filled.push(k); }
+        draw(); check();
+      };
+    };
+    const check = () => {
+      if (filled.length !== letters.length) return;
+      const fb = st.querySelector(".fb");
+      if (filled.map((k) => pool2[k]).join("") === letters.join("")) {
+        fb.className = "fb g"; fb.innerHTML = `${esc(w)} 🎉<div class="tr" style="font-weight:400">${trHtml(t)}</div>`; sndOk(); speak(w);
+        if (!hinted) right++; n++; setTimeout(next, 1500);
+      } else { fb.className = "fb b"; fb.textContent = "Почти! Попробуйте ещё 🙂"; sndNo(); setTimeout(() => { filled = []; draw(); }, 900); }
+    };
+    draw();
+  };
+  next();
+}
+
+// ---------- 🪜 собери фразу ----------
+function sentenceGame(count, done) {
+  const open = D.sentences.filter((s) => s[3] <= Math.max(known().length, 6));
+  if (!open.length) return notEnough();
+  const list = shuffle(open.slice(-3).concat(pick(open.slice(0, -3), Math.max(0, count - 3)))).slice(0, count);
+  let n = 0, right = 0;
+  const next = () => {
+    if (n >= list.length) return done(right);
+    const [s, t, m] = list[n]; const clean = (x) => x.replace(/[.,!?¿¡]/g, "");
+    const words = s.split(" "); const tiles = shuffle(words.map((w) => clean(w)));
+    const st = frame(n, list.length); let built = []; let help = false;
+    const draw = () => {
+      st.innerHTML = `<div class="pic" style="font-size:60px">🪜</div><div class="ask">${esc(m)}</div>
+        <div class="line">${built.map((k) => `<span class="chip">${esc(tiles[k])}</span>`).join("")}</div>
+        <div class="chips">${tiles.map((x, k) => `<span class="chip ${built.includes(k) ? "used" : ""}" data-k="${k}">${esc(x)}</span>`).join("")}</div>
+        <div class="row"><button class="btn light" id="say">🔊 Подсказка</button><button class="btn light" id="clr">⌫ Стереть</button></div><div class="fb"></div>`;
+      st.querySelectorAll(".chips .chip").forEach((c) => c.onclick = () => { built.push(+c.dataset.k); draw(); check(); });
+      st.querySelector("#clr").onclick = () => { built.pop(); draw(); };
+      st.querySelector("#say").onclick = () => { help = true; speak(s); st.querySelector(".fb").innerHTML = `<span class="tr">${trHtml(t)}</span>`; };
+    };
+    const check = () => {
+      if (built.length !== words.length) return; const fb = st.querySelector(".fb");
+      if (built.map((k) => tiles[k]).join(" ") === words.map(clean).join(" ")) {
+        fb.className = "fb g"; fb.innerHTML = `${esc(s)} 🎉<div class="tr" style="font-weight:400">${trHtml(t)}</div>`; sndOk(); speak(s);
+        if (!help) right += 2; n++; setTimeout(next, 2000);
+      } else { fb.className = "fb b"; fb.textContent = "Почти! Другой порядок 🙂"; sndNo(); setTimeout(() => { built = []; draw(); }, 1000); }
+    };
+    draw();
+  };
+  next();
+}
+
+// ---------- 📖 мои слова ----------
+function myWords() {
+  const list = known().filter((i) => i < D.words.length);
+  app.innerHTML = `<div class="top"><button class="x" id="x">✕</button><span class="pill">📖 ${list.length} слов</span></div>
+    <div style="margin-top:12px">${list.length ? list.map((i) => `<div class="lvl" style="display:flex;gap:12px;align-items:center;margin-top:8px;cursor:pointer" data-say="${esc(W(i)[0])}">
+      <span style="font-size:34px">${W(i)[3] || "💬"}</span><span><b>${esc(W(i)[0])}</b> <span class="sub">${trHtml(W(i)[1])}</span><br><span class="sub">${esc(W(i)[2])}</span></span></div>`).join("")
+      : `<div class="empty">Здесь появятся выученные слова 🌱</div>`}</div>`;
+  app.querySelector("#x").onclick = home;
+}
+
+// ================= запуск =================
+fetch(LANG + ".json?v=2").then((r) => r.json()).then((data) => {
+  D = data; initVoice();
+  storeGet((raw) => {
+    let o = {}; try { o = JSON.parse(raw || "{}"); } catch (e) {}
+    S = { stars: o.st || 0, streak: o.sk || 0, last: o.last || "", day: o.day || "", stage: o.stage || 0, newWords: o.nw || [],
+          learned: uniq(bitsToList(o.lw).concat(bitsToList(P.get("k")))).filter((i) => i < D.words.length) };
+    if (S.last && S.last !== dayStr() && S.last !== yesterday()) S.streak = 0;   // серия прервалась
+    home();
+  });
+}).catch(() => { app.innerHTML = '<div class="empty">Не получилось загрузить 😕<br>Проверьте интернет и откройте ещё раз.</div>'; });
+</script>
+</body>
+</html>
