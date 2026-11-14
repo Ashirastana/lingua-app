@@ -89,6 +89,14 @@
   @keyframes fall { to { transform:translateY(110vh) rotate(600deg); opacity:.6; } }
   .pop { animation:pop .45s ease; } @keyframes pop { 0%{transform:scale(.6);opacity:0} 70%{transform:scale(1.08)} 100%{transform:scale(1)} }
   .empty { text-align:center; color:var(--hint); margin-top:40px; }
+  .heart { position:fixed; bottom:-40px; font-size:34px; pointer-events:none; animation:rise 2.8s ease-out forwards; z-index:9; }
+  @keyframes rise { 0%{transform:translateY(0) scale(.6);opacity:0} 15%{opacity:1} 100%{transform:translateY(-105vh) scale(1.25) rotate(20deg);opacity:0} }
+  .praise { font-size:30px; font-weight:900; color:var(--accent); margin:6px 0; }
+  .vid { display:flex; gap:12px; align-items:center; background:var(--card); border-radius:18px; padding:14px; margin-top:10px;
+         box-shadow:0 1px 6px rgba(0,0,0,.05); cursor:pointer; }
+  .vid .t { font-weight:800; } .vid .d { color:var(--hint); font-size:14px; }
+  .vid.lock { opacity:.45; cursor:default; }
+  .theme { font-size:15px; opacity:.95; margin-top:2px; }
 </style>
 </head>
 <body>
@@ -164,7 +172,8 @@ function storeGet(cb) {
   local();
 }
 function save() {
-  const v = JSON.stringify({ st: S.stars, sk: S.streak, last: S.last, day: S.day, stage: S.stage, lw: listToBits(S.learned), nw: S.newWords });
+  const v = JSON.stringify({ st: S.stars, sk: S.streak, last: S.last, stage: S.stage, ls: S.lesson, lw: listToBits(S.learned),
+                             vd: S.vidDay, lp: S.lastPraise });
   try { if (tg && tg.CloudStorage && tg.isVersionAtLeast("6.9")) tg.CloudStorage.setItem(KEY, v); } catch (e) {}
   try { localStorage.setItem(KEY, v); } catch (e) {}
 }
@@ -192,18 +201,12 @@ function pool(needPic) {
   return p;
 }
 
-// ================= слова сегодняшнего урока =================
-function todayWords() {
-  if (S.day === dayStr() && S.newWords && S.newWords.length) return S.newWords;
-  const fromBot = (P.get("t") || "").split(",").map((x) => parseInt(x, 10)).filter((x) => x >= 0 && x < D.words.length);
-  let w = fromBot;
-  if (!w.length) w = EASY.filter((i) => !S.learned.includes(i)).slice(0, NEW_PER_DAY);
-  if (!w.length) w = pick(S.learned, NEW_PER_DAY);       // весь словарь пройден — повторяем
-  if (S.day !== dayStr()) { S.day = dayStr(); S.stage = 0; }
-  w = w.slice().sort((a, b) => ease(a) - ease(b));
-  S.newWords = w; save();
-  return w;
+// ================= уроки по плану: день = тема =================
+function curLesson() {                       // первый урок, где есть невыученные слова
+  const k = D.days.findIndex((d) => d[1].some((i) => !S.learned.includes(i)));
+  return k < 0 ? D.days.length - 1 : k;
 }
+function lessonWords(k) { return D.days[k][1]; }
 
 // ================= главный экран =================
 const STAGES = [
@@ -213,6 +216,7 @@ const STAGES = [
   { name: "Угадай слово", run: (w, done) => guessWord(lessonMix(w, false).slice(0, 4), done) },
   { name: "Собери фразу", run: (w, done) => sentenceGame(3, done) },
 ];
+function todayWords() { return lessonWords(curLesson()); }
 function lessonMix(w, needPic) { // сегодняшние слова + немного старых для повторения
   const today = w.filter((i) => !needPic || hasPic(i));
   const old = pick(pool(needPic).filter((i) => !w.includes(i)), Math.max(2, 6 - today.length));
@@ -220,7 +224,8 @@ function lessonMix(w, needPic) { // сегодняшние слова + немн
 }
 
 function home() {
-  const tw = todayWords();
+  const k = curLesson(); const tw = lessonWords(k);
+  if (S.lesson !== k) { S.lesson = k; S.stage = 0; save(); }
   const lvl = levelOf(S.stars), next = LEVELS[lvl + 1];
   const pct = next ? Math.round((S.stars - LEVELS[lvl]) / (next - LEVELS[lvl]) * 100) : 100;
   const doneToday = S.last === dayStr();
@@ -231,9 +236,9 @@ function home() {
     <div class="lvl"><div class="t"><span>${LEVEL_ICONS[lvl]} Уровень ${lvl + 1}</span>
       <span>${next ? (next - S.stars) + " ⭐ до " + (lvl + 2) : "максимум!"}</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>
     <button class="hero ${doneToday ? "done" : ""}" id="go">
-      <div class="h1">${doneToday ? "✅ Урок пройден!" : S.stage ? "▶️ Продолжить урок" : "▶️ Урок дня"}</div>
-      <div class="h2">${doneToday ? "Завтра — новые слова. Можно повторить 👇" : tw.length + " новых слов · 5 шагов · ~10 минут"}</div>
-      <div class="steps">${STAGES.map((_, k) => `<i class="${doneToday || k < S.stage ? "on" : ""}"></i>`).join("")}</div>
+      <div class="h1">${S.stage ? "▶️ Продолжить" : doneToday ? "⭐ Ещё урок" : "▶️ Урок дня"} · ${k + 1}</div>
+      <div class="theme">${esc(D.days[k][0])} · ${tw.length} слов · ~10 минут</div>
+      <div class="steps">${STAGES.map((_, j) => `<i class="${j < S.stage ? "on" : ""}"></i>`).join("")}</div>
     </button>
     <div class="sec">ПОВТОРИТЬ</div>
     <div class="grid">
@@ -243,8 +248,9 @@ function home() {
       <div class="tile" data-g="p2w"><span class="i">🖼</span>Что это?</div>
       <div class="tile" data-g="sent"><span class="i">🪜</span>Собери фразу</div>
       <div class="tile" data-g="all"><span class="i">📖</span>Мои слова</div>
+      <div class="tile" data-g="vid" style="grid-column:1 / -1"><span class="i">🎬</span>Видео на ${LANG === "es" ? "испанском" : "турецком"}</div>
     </div>`;
-  app.querySelector("#go").onclick = () => doneToday ? practiceAgain() : runLesson();
+  app.querySelector("#go").onclick = runLesson;
   const P1 = () => practiceEnd;
   app.querySelectorAll("[data-g]").forEach((t) => t.onclick = () => ({
     cards: () => cardsGame(pick(pool(false), 8), P1()),
@@ -253,13 +259,14 @@ function home() {
     p2w: () => pic2word(pick(pool(true), 7), P1()),
     sent: () => sentenceGame(4, P1()),
     all: () => myWords(),
+    vid: () => videos(),
   }[t.dataset.g])());
 }
-function practiceAgain() { guessWord(pick(pool(false), 5), practiceEnd); }
 
 // ================= урок дня: все шаги подряд =================
 function runLesson() {
-  const w = todayWords();
+  const k = curLesson(); if (S.lesson !== k) { S.lesson = k; S.stage = 0; }
+  const w = lessonWords(k);
   const step = () => {
     if (S.stage >= STAGES.length) return lessonDone(w);
     STAGES[S.stage].run(w, (right) => {
@@ -275,24 +282,39 @@ function between(stage, right, levelUp, next) {
   sndWin();
   app.innerHTML = `<div class="center pop">
       <div class="pic">${levelUp ? LEVEL_ICONS[levelOf(S.stars)] : ["👏", "🎉", "💪", "🔥", "🌟"][stage % 5]}</div>
-      <h1>${levelUp ? "Новый уровень " + (levelOf(S.stars) + 1) + "!" : "Шаг " + stage + " из " + STAGES.length + " ✅"}</h1>
+      <h1>${levelUp ? "Новый уровень " + (levelOf(S.stars) + 1) + "!" : praise()}</h1>
+      <div class="sub">Шаг ${stage} из ${STAGES.length} ✅</div>
       <div class="reward"><span class="pill">⭐ +${right}</span></div>
       <div class="sub">Дальше: ${STAGES[stage].name}</div>
       <button class="btn" id="n">Дальше ▶️</button></div>`;
   if (levelUp) confetti();
   app.querySelector("#n").onclick = next;
 }
+const PRAISE = ["Умничка! 💖", "Ты большой молодец! 🌟", "Продолжай в том же духе! 🚀", "Браво! Вот это да! 👏",
+  "Ты просто супер! 😍", "Горжусь тобой! 🥰", "Шикарно! Так держать! 💪", "Ты делаешь огромные успехи! 🏆",
+  "Восхитительно! 😘", "Вау, какая ты умница! ✨", "Блестяще! 💎", "Ты звезда! ⭐", "Невероятно! Ты лучшая! 🌸"];
+function praise() { let p; do { p = pick(PRAISE, 1)[0]; } while (PRAISE.length > 1 && p === S.lastPraise); S.lastPraise = p; return p; }
+function hearts() {
+  const ic = ["💖", "😘", "💋", "💕", "🥰", "✨", "💗"];
+  for (let i = 0; i < 22; i++) { const h = document.createElement("div"); h.className = "heart"; h.textContent = ic[i % ic.length];
+    h.style.left = (5 + Math.random() * 90) + "vw"; h.style.animationDelay = Math.random() * 1.2 + "s";
+    document.body.appendChild(h); setTimeout(() => h.remove(), 4200); }
+}
 function lessonDone(w, levelUp) {
-  if (S.last !== dayStr()) { S.streak = S.last === yesterday() ? S.streak + 1 : 1; S.last = dayStr(); }
-  S.learned = uniq(S.learned.concat(w));
+  const first = S.last !== dayStr();
+  if (first) { S.streak = S.last === yesterday() ? S.streak + 1 : 1; S.last = dayStr(); }
+  S.learned = uniq(S.learned.concat(w)); S.stage = 0;
   const up = addStars(10) || levelUp;
-  confetti(); sndWin();
+  const nk = curLesson();
+  hearts(); confetti(); sndWin(); try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) {}
   app.innerHTML = `<div class="center pop">
-      <div class="pic">🏆</div><h1>Урок дня пройден!</h1>
-      <div class="reward"><span class="pill">🔥 ${S.streak} ${S.streak === 1 ? "день" : "дн."} подряд</span><span class="pill">⭐ +10 бонус</span></div>
-      ${up ? `<div class="sub">Новый уровень ${levelOf(S.stars) + 1} ${LEVEL_ICONS[levelOf(S.stars)]}</div>` : ""}
-      <div class="sub" style="margin-top:8px">Маленькими шагами — к большой цели 🏔<br>Завтра — новые слова!</div>
-      <button class="btn" id="h">Готово</button></div>`;
+      <div class="pic">${up ? LEVEL_ICONS[levelOf(S.stars)] : pick(["🏆", "🥰", "🌟", "💖", "🎉"], 1)[0]}</div>
+      <div class="praise">${praise()}</div>
+      <div class="sub">${first ? "Урок дня пройден!" : "Ещё один урок пройден!"} ${up ? "<br><b>Новый уровень " + (levelOf(S.stars) + 1) + "!</b>" : ""}</div>
+      <div class="reward"><span class="pill">🔥 ${S.streak} ${S.streak === 1 ? "день" : "дн."} подряд</span><span class="pill">⭐ +10</span></div>
+      <button class="btn" id="nx">▶️ Следующий урок: ${esc(D.days[nk][0])}</button>
+      <button class="btn light" id="h">🏠 В меню</button></div>`;
+  app.querySelector("#nx").onclick = () => { S.lesson = nk; save(); runLesson(); };
   app.querySelector("#h").onclick = home;
 }
 function practiceEnd(right) {
@@ -456,6 +478,26 @@ function sentenceGame(count, done) {
   next();
 }
 
+// ---------- 🎬 видео по уровню ----------
+function videos() {
+  const lvl = levelOf(S.stars) + 1;
+  const list = (D.videos || []).slice().sort((a, b) => a.lvl - b.lvl);
+  const watched = S.vidDay === dayStr();
+  app.innerHTML = `<div class="top"><button class="x" id="x">✕</button><span class="pill">🎬 Уровень ${lvl}</span></div>
+    <div class="sub" style="margin-top:12px">Смотрите 10–15 минут. Понимать всё не нужно — привыкаем к звучанию 🎧</div>
+    ${list.map((v, k) => v.lvl <= lvl
+      ? `<div class="vid" data-v="${k}"><span style="font-size:30px">▶️</span><span><div class="t">${esc(v.t)}</div><div class="d">${esc(v.d)}</div></span></div>`
+      : `<div class="vid lock"><span style="font-size:30px">🔒</span><span><div class="t">${esc(v.t)}</div><div class="d">Откроется на уровне ${v.lvl}</div></span></div>`).join("")}
+    <button class="btn ${watched ? "light" : ""}" id="w">${watched ? "✅ Сегодня уже посмотрела" : "✅ Посмотрела видео · +5 ⭐"}</button>`;
+  app.querySelector("#x").onclick = home;
+  app.querySelectorAll("[data-v]").forEach((el) => el.onclick = () => {
+    const u = list[+el.dataset.v].u;
+    try { if (tg && tg.openLink) return tg.openLink(u); } catch (e) {}
+    window.open(u, "_blank");
+  });
+  app.querySelector("#w").onclick = () => { if (watched) return; S.vidDay = dayStr(); const up = addStars(5); hearts(); sndWin(); if (up) confetti(); videos(); };
+}
+
 // ---------- 📖 мои слова ----------
 function myWords() {
   const list = known().filter((i) => i < D.words.length);
@@ -467,11 +509,12 @@ function myWords() {
 }
 
 // ================= запуск =================
-fetch(LANG + ".json?v=3").then((r) => r.json()).then((data) => {
+fetch(LANG + ".json?v=4").then((r) => r.json()).then((data) => {
   D = data; initVoice(); initEase();
   storeGet((raw) => {
     let o = {}; try { o = JSON.parse(raw || "{}"); } catch (e) {}
-    S = { stars: o.st || 0, streak: o.sk || 0, last: o.last || "", day: o.day || "", stage: o.stage || 0, newWords: o.nw || [],
+    S = { stars: o.st || 0, streak: o.sk || 0, last: o.last || "", stage: o.stage || 0, lesson: o.ls || 0, vidDay: o.vd || "",
+          lastPraise: o.lp || "",
           learned: uniq(bitsToList(o.lw).concat(bitsToList(P.get("k")))).filter((i) => i < D.words.length) };
     if (S.last && S.last !== dayStr() && S.last !== yesterday()) S.streak = 0;   // серия прервалась
     home();
